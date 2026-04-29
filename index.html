@@ -1,0 +1,288 @@
+import React, { useState, useMemo } from 'react';
+import { Trash2, Plus, RefreshCcw, RefreshCw, Scale, RotateCcw, Info } from 'lucide-react';
+
+export default function TorqueLab() {
+  const [forces, setForces] = useState([
+    { id: 1, magnitude: 20, position: -3 }, // Example initial forces
+    { id: 2, magnitude: 30, position: 2 },
+  ]);
+
+  const [newMagnitude, setNewMagnitude] = useState(10);
+  const [newPosition, setNewPosition] = useState(4);
+
+  // الحسابات الفيزيائية
+  const calculations = useMemo(() => {
+    const ccwForces = forces.filter(f => f.position < 0);
+    const cwForces = forces.filter(f => f.position > 0);
+    const centerForces = forces.filter(f => f.position === 0); // لا تنتج عزماً
+
+    const ccwTorque = ccwForces.reduce((sum, f) => sum + (f.magnitude * Math.abs(f.position)), 0);
+    const cwTorque = cwForces.reduce((sum, f) => sum + (f.magnitude * f.position), 0);
+    
+    const netTorque = ccwTorque - cwTorque; // الموجب يعني عكس عقارب الساعة، السالب مع عقارب الساعة
+    const isBalanced = netTorque === 0;
+
+    // تحديد زاوية الميلان البصرية (أقصى ميلان 12 درجة)
+    let rotation = 0;
+    if (netTorque > 0) rotation = -10; // يميل لليسار
+    else if (netTorque < 0) rotation = 10; // يميل لليمين
+
+    return { ccwForces, cwForces, centerForces, ccwTorque, cwTorque, netTorque, isBalanced, rotation };
+  }, [forces]);
+
+  const addForce = (e) => {
+    e.preventDefault();
+    if (newMagnitude <= 0) return;
+    const newForce = {
+      id: Date.now(),
+      magnitude: parseFloat(newMagnitude),
+      position: parseFloat(newPosition)
+    };
+    setForces([...forces, newForce]);
+  };
+
+  const removeForce = (id) => {
+    setForces(forces.filter(f => f.id !== id));
+  };
+
+  const clearAll = () => {
+    setForces([]);
+  };
+
+  // توليد علامات المسطرة للرافعة (من -5 إلى 5)
+  const markings = Array.from({ length: 11 }, (_, i) => i - 5);
+
+  return (
+    <div dir="rtl" className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans text-slate-800">
+      <div className="max-w-5xl mx-auto space-y-6">
+        
+        {/* رأس الصفحة */}
+        <header className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-indigo-900 flex items-center gap-2">
+              <Scale className="text-indigo-600" />
+              المختبر التفاعلي: محصلة العزوم (قانون الروافع)
+            </h1>
+            <p className="text-slate-500 mt-1">قم بإضافة القوى على مسافات مختلفة ولاحظ تأثيرها على حالة الاتزان.</p>
+          </div>
+          <button 
+            onClick={clearAll}
+            className="hidden md:flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
+          >
+            <RotateCcw size={18} />
+            تصفير المختبر
+          </button>
+        </header>
+
+        {/* منطقة المحاكاة البصرية */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 overflow-hidden relative h-96 flex flex-col justify-end pb-12">
+          
+          {/* حالة الاتزان */}
+          <div className="absolute top-6 left-1/2 -translate-x-1/2 flex items-center gap-3">
+            <div className={`px-6 py-2 rounded-full font-bold text-lg flex items-center gap-2 shadow-sm transition-all duration-300 ${calculations.isBalanced ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-orange-100 text-orange-700 border border-orange-200'}`}>
+              {calculations.isBalanced ? (
+                <>متزن (محصلة العزوم = صفر)</>
+              ) : (
+                <>غير متزن (يوجد عزم دوران)</>
+              )}
+            </div>
+          </div>
+
+          <div className="relative w-full max-w-4xl mx-auto">
+            {/* نقطة الارتكاز (المثلث) */}
+            <div className="absolute left-1/2 bottom-0 -translate-x-1/2 w-0 h-0 
+              border-l-[30px] border-l-transparent 
+              border-r-[30px] border-r-transparent 
+              border-b-[50px] border-b-slate-700 z-10"
+            />
+            
+            {/* القاعدة السفلية */}
+            <div className="absolute left-0 right-0 bottom-[-4px] h-1 bg-slate-300 rounded-full" />
+
+            {/* الرافعة (المسطرة) */}
+            <div 
+              className="absolute left-0 right-0 bottom-[50px] h-6 bg-amber-600 rounded-sm shadow-md transition-transform duration-700 ease-in-out origin-center z-20 flex items-center"
+              style={{ transform: `rotate(${calculations.rotation}deg)` }}
+            >
+              {/* تدرجات المسطرة */}
+              {markings.map(mark => (
+                <div key={mark} className="absolute h-full flex flex-col justify-between items-center" style={{ left: `${(mark + 5) * 10}%`, transform: 'translateX(-50%)' }}>
+                  <div className="w-0.5 h-2 bg-amber-900/40"></div>
+                  <span className="text-[10px] font-bold text-amber-900 select-none">{Math.abs(mark)}m</span>
+                  <div className="w-0.5 h-2 bg-amber-900/40"></div>
+                </div>
+              ))}
+
+              {/* القوى (الأوزان) المضافة */}
+              {forces.map(force => (
+                <div 
+                  key={force.id} 
+                  className="absolute flex flex-col items-center group cursor-default"
+                  style={{ 
+                    left: `${(force.position + 5) * 10}%`, 
+                    transform: 'translateX(-50%)',
+                    top: '100%' // يبدأ من أسفل الرافعة
+                  }}
+                >
+                  <div className="w-1 h-8 bg-slate-400 group-hover:bg-slate-600 transition-colors"></div>
+                  <div 
+                    className="bg-indigo-600 text-white rounded-md shadow-lg flex items-center justify-center font-bold border-2 border-indigo-800 transition-transform hover:scale-110"
+                    style={{ 
+                      width: '40px', 
+                      height: `${Math.min(Math.max(force.magnitude * 1.5, 30), 80)}px`,
+                      fontSize: '14px'
+                    }}
+                    title={`القوة: ${force.magnitude} نيوتن، المسافة: ${Math.abs(force.position)} متر`}
+                  >
+                    {force.magnitude}N
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* أدوات التحكم والحسابات */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          
+          {/* عمود إضافة قوة جديدة */}
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+            <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+              <Plus size={20} className="text-indigo-500"/>
+              إضافة قوة جديدة
+            </h2>
+            <form onSubmit={addForce} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-600 mb-1">
+                  مقدار القوة (نيوتن): {newMagnitude} N
+                </label>
+                <input 
+                  type="range" 
+                  min="5" max="100" step="5"
+                  value={newMagnitude}
+                  onChange={(e) => setNewMagnitude(e.target.value)}
+                  className="w-full accent-indigo-600"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-600 mb-1">
+                  موقع القوة (متر): {newPosition} m {newPosition === 0 ? '(المركز)' : newPosition > 0 ? '(يمين)' : '(يسار)'}
+                </label>
+                <input 
+                  type="range" 
+                  min="-5" max="5" step="1"
+                  value={newPosition}
+                  onChange={(e) => setNewPosition(e.target.value)}
+                  className="w-full accent-indigo-600"
+                />
+                <div className="flex justify-between text-xs text-slate-400 mt-1">
+                  <span>يسار (-5)</span>
+                  <span>المركز (0)</span>
+                  <span>يمين (5)</span>
+                </div>
+              </div>
+              <button 
+                type="submit"
+                className="w-full bg-indigo-600 text-white font-medium py-2.5 rounded-xl hover:bg-indigo-700 transition-colors shadow-sm"
+              >
+                إضافة القوة للمختبر
+              </button>
+            </form>
+
+            <div className="mt-6">
+              <h3 className="text-sm font-bold text-slate-700 mb-2 border-b pb-2">القوى الحالية ({forces.length})</h3>
+              <div className="space-y-2 max-h-32 overflow-y-auto pr-1">
+                {forces.length === 0 && <p className="text-sm text-slate-400 text-center py-2">لا توجد قوى مضافة</p>}
+                {forces.map(f => (
+                  <div key={f.id} className="flex items-center justify-between bg-slate-50 p-2 rounded-lg border border-slate-100 text-sm">
+                    <span className="font-medium text-slate-700">{f.magnitude}N @ {f.position}m</span>
+                    <button 
+                      onClick={() => removeForce(f.id)}
+                      className="text-red-400 hover:text-red-600 p-1 bg-white rounded-md shadow-sm"
+                      title="حذف القوة"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* عمود الحسابات */}
+          <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            
+            {/* العزوم المعاكسة (يسار) */}
+            <div className="bg-blue-50 border border-blue-100 p-5 rounded-2xl flex flex-col">
+              <div className="flex items-center gap-2 mb-3 text-blue-800">
+                <RefreshCcw size={20} />
+                <h3 className="font-bold text-lg">عزوم عكس عقارب الساعة</h3>
+              </div>
+              <p className="text-sm text-blue-600 mb-4">القوى المؤثرة في الجانب الأيسر للرافعة</p>
+              
+              <div className="flex-1 space-y-2">
+                {calculations.ccwForces.length === 0 && <div className="text-sm text-blue-400">لا يوجد قوى</div>}
+                {calculations.ccwForces.map(f => (
+                  <div key={f.id} className="flex justify-between text-sm bg-white/60 p-2 rounded text-blue-900">
+                    <span>{f.magnitude}N × {Math.abs(f.position)}m</span>
+                    <span className="font-bold">{f.magnitude * Math.abs(f.position)} N.m</span>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="mt-4 pt-3 border-t border-blue-200 flex justify-between items-center">
+                <span className="font-medium text-blue-800">المجموع (τ₁):</span>
+                <span className="text-xl font-black text-blue-700">{calculations.ccwTorque} N.m</span>
+              </div>
+            </div>
+
+            {/* العزوم الموافقة (يمين) */}
+            <div className="bg-rose-50 border border-rose-100 p-5 rounded-2xl flex flex-col">
+              <div className="flex items-center gap-2 mb-3 text-rose-800">
+                <RefreshCw size={20} />
+                <h3 className="font-bold text-lg">عزوم مع عقارب الساعة</h3>
+              </div>
+              <p className="text-sm text-rose-600 mb-4">القوى المؤثرة في الجانب الأيمن للرافعة</p>
+              
+              <div className="flex-1 space-y-2">
+                {calculations.cwForces.length === 0 && <div className="text-sm text-rose-400">لا يوجد قوى</div>}
+                {calculations.cwForces.map(f => (
+                  <div key={f.id} className="flex justify-between text-sm bg-white/60 p-2 rounded text-rose-900">
+                    <span>{f.magnitude}N × {f.position}m</span>
+                    <span className="font-bold">{f.magnitude * f.position} N.m</span>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="mt-4 pt-3 border-t border-rose-200 flex justify-between items-center">
+                <span className="font-medium text-rose-800">المجموع (τ₂):</span>
+                <span className="text-xl font-black text-rose-700">{calculations.cwTorque} N.m</span>
+              </div>
+            </div>
+
+            {/* صندوق المعادلة النهائية */}
+            <div className="sm:col-span-2 bg-slate-800 text-white p-5 rounded-2xl shadow-md flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="bg-slate-700 p-3 rounded-xl text-indigo-400">
+                  <Info size={24} />
+                </div>
+                <div>
+                  <h3 className="text-slate-300 text-sm font-medium">شرط الاتزان: (Στ = 0)</h3>
+                  <div className="text-xl font-mono mt-1">
+                    τ₁ = τ₂  <span className="text-slate-500 mx-2">➔</span> {calculations.ccwTorque} = {calculations.cwTorque}
+                  </div>
+                </div>
+              </div>
+              
+              <div className={`px-6 py-3 rounded-xl font-bold text-lg text-center min-w-[200px] ${calculations.isBalanced ? 'bg-green-500 text-white' : 'bg-orange-500 text-white'}`}>
+                {calculations.isBalanced ? 'الرافعة في حالة اتزان' : 'الرافعة تدور (غير متزنة)'}
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
